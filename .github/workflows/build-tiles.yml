@@ -1,7 +1,10 @@
 name: Build Valhalla Egypt Tiles
 
 on:
-  workflow_dispatch: # هذا السطر يسمح لك بتشغيل البناء يدوياً متى شئت
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-egypt:
@@ -13,29 +16,30 @@ jobs:
 
       - name: Download Egypt PBF
         run: |
-          # تحميل خريطة مصر من Geofabrik
-          curl -L https://download.geofabrik.de/africa/egypt-latest.osm.pbf -o egypt.pbf
+          curl -fL https://download.geofabrik.de/africa/egypt-latest.osm.pbf -o egypt.pbf || exit 1
+          echo "تم تحميل الخريطة بنجاح"
 
       - name: Build Tiles with Valhalla
         run: |
           mkdir -p custom_tiles
-          # إنشاء الإعدادات والبناء داخل حاوية Docker
-          docker run --rm -v $(pwd):/data ghcr.io/valhalla/valhalla:latest \
-            valhalla_build_config \
-            --mjolnir-tile-dir /data/custom_tiles \
-            --mjolnir-tile-extract /data/egypt_tiles.tar \
-            --mjolnir-timezone /data/custom_tiles/timezones.sqlite \
-            --mjolnir-admin /data/custom_tiles/admins.sqlite > valhalla.json
+          chmod -R 777 $(pwd)
           
-          docker run --rm -v $(pwd):/data ghcr.io/valhalla/valhalla:latest \
+          docker run --rm -v $(pwd):/data ghcr.io/valhalla/valhalla:latest sh -c "
+            valhalla_build_config \
+              --mjolnir-tile-dir /data/custom_tiles \
+              --mjolnir-tile-extract /data/egypt_tiles.tar \
+              --mjolnir-timezone /data/custom_tiles/timezones.sqlite \
+              --mjolnir-admin /data/custom_tiles/admins.sqlite > /data/valhalla.json && \
             valhalla_build_tiles -c /data/valhalla.json /data/egypt.pbf
+          "
 
       - name: Compress and Upload
+        if: success()
         run: |
-          # ضغط الملفات الناتجة
           tar -cvzf egypt_valhalla_data.tar.gz custom_tiles valhalla.json egypt_tiles.tar
 
       - name: Save Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: egypt-tiles-package
