@@ -17,12 +17,11 @@ jobs:
       - name: Download Egypt PBF
         run: |
           curl -fL https://download.geofabrik.de/africa/egypt-latest.osm.pbf -o egypt.pbf || exit 1
-          echo "تم تحميل الخريطة بنجاح"
 
-      - name: Build Tiles with Valhalla
+      - name: Build and Extract Tiles
         run: |
           mkdir -p custom_tiles
-          chmod -R 777 $(pwd)
+          chmod -R 777 .
           
           docker run --rm -v $(pwd):/data ghcr.io/valhalla/valhalla:latest sh -c "
             valhalla_build_config \
@@ -30,13 +29,15 @@ jobs:
               --mjolnir-tile-extract /data/egypt_tiles.tar \
               --mjolnir-timezone /data/custom_tiles/timezones.sqlite \
               --mjolnir-admin /data/custom_tiles/admins.sqlite > /data/valhalla.json && \
-            valhalla_build_tiles -c /data/valhalla.json /data/egypt.pbf
+            valhalla_build_tiles -c /data/valhalla.json /data/egypt.pbf && \
+            valhalla_build_extract -c /data/valhalla.json && \
+            chmod -R 777 /data
           "
 
       - name: Compress and Upload
         if: success()
         run: |
-          tar -cvzf egypt_valhalla_data.tar.gz custom_tiles valhalla.json egypt_tiles.tar
+          tar -cvzf egypt_valhalla_data.tar.gz valhalla.json egypt_tiles.tar
 
       - name: Save Artifact
         if: success()
